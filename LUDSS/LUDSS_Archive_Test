@@ -1,0 +1,141 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var landslide = ee.FeatureCollection("projects/servir-e-sa/rwanda_ludss/MidiMar/Landslide_midimar"),
+    lcc_10_15 = ee.Image("projects/servir-e-sa/rwanda_ludss/RCMRD/SchemeIChangeMap_y10y15"),
+    landdegrade_2016 = ee.Image("projects/servir-e-sa/rwanda_ludss/RCMRD/land_degr_2016_rwanda"),
+    rwanda_shp = ee.FeatureCollection("projects/servir-e-sa/rwanda_ludss/RCMRD/Rwanda_shp"),
+    rw_provinces = ee.FeatureCollection("projects/servir-e-sa/rwanda_ludss/RCMRD/RWA_adm1"),
+    rw_districts = ee.FeatureCollection("projects/servir-e-sa/rwanda_ludss/RCMRD/RWA_adm2"),
+    rw_sectors = ee.FeatureCollection("projects/servir-e-sa/rwanda_ludss/RCMRD/RWA_adm3"),
+    rw_cells = ee.FeatureCollection("projects/servir-e-sa/rwanda_ludss/RCMRD/RWA_adm4"),
+    rw_villages = ee.FeatureCollection("projects/servir-e-sa/rwanda_ludss/RCMRD/RWA_adm5");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+
+/*
+This tool (LUDSS) is being developed by Steve Firsake with RCMRD -Regional Center for Mapping of Resources for Development.
+The dataset used in the tool are derived from both RLMUA and RCMRD
+*/
+
+Map.centerObject(rwanda_shp);
+
+Map.addLayer(rwanda_shp,{},'Rwanda Boundary');
+
+
+//LANDSLIDE////////////////////////////////////////////////////////////////////////////////////////////
+
+/*
+//Accessing the layer as a vector with coloring
+
+var landslide_colors = ee.List(["000000","006100CC", "7AAB00CC", "FFFF00CC", "FF9900CC", "FF2200CC"])
+
+var landslide_result = landslide.map(function(f) {
+    var colorIndex = f.get('gridcode')  //this is a property of the layer
+    return f.set('style', {color: landslide_colors.get(colorIndex)})
+});
+
+var landslide_final = landslide_result.style({styleProperty: 'style'});
+
+Map.addLayer(landslide_final,{},'Landslide Susceptibility');
+*/
+
+
+var landslide_image = ee.Image().byte().paint(landslide, 'gridcode');
+var landslide_visualisation = {min:1, max:5, palette:["006100CC", "7AAB00CC", "FFFF00CC", "FF9900CC", "FF2200CC"]};
+Map.addLayer(landslide_image,landslide_visualisation,'Landslide Susceptibility',false);
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//LCC_2015_2010/////////////////////////////////////////////////////////////////////////////////////////
+var lcc_visualisation = {min: -5, max: 5, palette: ["006100","FFFF00","FF2200"]};
+var lcc_image = lcc_10_15.clip(rwanda_shp);
+//var lcc_masked_0 = lcc_10_15.updateMask(lcc_10_15.neq(0));//removing value 0 for no change
+Map.addLayer(lcc_image, lcc_visualisation, 'Land Cover Change (2010-2015)',false);
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//LAND_DEGRADATION_2016//////////////////////////////////////////////////////////////////////////////////
+var land_degradation_visualisation = {min: 1, max: 5, palette: ["006100","FFFF00","FF2200"]};
+Map.addLayer(landdegrade_2016, land_degradation_visualisation, 'Land Degradation (2016)',false);
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+//PROCESSING/////////////////////////////////////////////////////////////////////////////////////////////
+
+var vulnerability = landdegrade_2016.add(lcc_image).add(landslide_image);
+var land_vulnerability_visualisation = {min: -3, max: 15, palette: ["006100","FFFF00","FF2200"]};
+Map.addLayer(vulnerability, land_vulnerability_visualisation, 'Vulnerability',false);
+
+/*
+  var statsLandSlideFeature = landslide.aggregate_stats('gridcode');
+  
+  var minMaxLandSlide = landslide_image.reduceRegion({
+    reducer: ee.Reducer.minMax(),
+    geometry: rwanda_shp,
+    scale: 30,
+    maxPixels: 1e13
+  });
+  
+  var minMaxDegrade = landdegrade_2016.reduceRegion({
+    reducer: ee.Reducer.minMax(),
+    geometry: rwanda_shp,
+    scale: 30,
+    maxPixels: 1e9
+  });
+  
+  var minMaxLCC = lcc_masked_0.reduceRegion({
+    reducer: ee.Reducer.minMax(),
+    geometry: rwanda_shp,
+    scale: 30,
+    maxPixels: 1e9
+  });
+  
+  print("LandSlide - Feature",statsLandSlideFeature); //inspecting the statistics for the landslide feature collection
+  print("LandSlide - Image",minMaxLandSlide); //tried to inspect it's minimum and maximum values
+  print("LCC",minMaxLCC);
+  print("Degrade",minMaxDegrade);
+*/
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//LEGEND/////////////////////////////////////////////////////////////////////////////////////////////////
+var legend = ui.Panel({
+  style: {
+    position: 'bottom-right',
+    padding: '8px 15px'
+  }
+});
+
+
+// Creates and styles 1 row of the legend.
+var makeRow = function(color, name) {
+  // Create the label that is actually the colored box.
+  var colorBox = ui.Label({
+    style: {
+      backgroundColor: '#' + color,
+      // Use padding to give the box height and width.
+      padding: '8px',
+      margin: '0 0 4px 0'
+    }
+  });
+  // Create the label filled with the description text.
+  var description = ui.Label({
+    value: name,
+    style: {margin: '0 0 4px 6px'}
+  });
+
+  return ui.Panel({
+    widgets: [colorBox, description],
+    layout: ui.Panel.Layout.Flow('horizontal')
+  });
+};
+
+//landslide
+legend.add(makeRow('006100','Very Low'));
+legend.add(makeRow('7AAB00','Low'));
+legend.add(makeRow('FFFF00','Moderate'));
+legend.add(makeRow('FF9900','High'));
+legend.add(makeRow('FF2200','Very High'));
+
+// Add the legend to the map.
+Map.add(legend);
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
